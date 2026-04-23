@@ -31,3 +31,4 @@ col_index = header.index("Youtube Links")  # find the column position
 youtube_links = [row[col_index] for row in all_values[1:]]
 
 print(youtube_links)
+print(len(youtube_links[]))

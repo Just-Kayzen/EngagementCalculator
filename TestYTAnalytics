@@ -39,3 +39,4 @@ if __name__ == "__main__":
     url = "https://www.youtube.com/watch?v=EmeW6li6bbo"
     stats = get_youtube_stats(YT_API_KEY, url)
     print("Official stats:", stats)
+    print("Official stats:", stats["views"], "views,", stats["likes"], "likes,", stats["comments"], "comments")
