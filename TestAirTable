@@ -1,0 +1,48 @@
+from pyairtable import Api, Table
+import requests
+import json
+
+with open("config.json") as f:
+    config = json.load(f)
+
+api_key = config["airtable"]["api_key"]
+base_id = config["airtable"]["base_id"]
+table_name = config["airtable"]["table_name"]
+api = Api(api_key)
+headers = {
+    "Authorization": f"Bearer {api_key}",
+    "Content-Type": "application/json" 
+}
+
+response = requests.get(
+    f"https://api.airtable.com/v0/{base_id}/{table_name}",
+    headers=headers
+    )
+
+# Create a Table instance
+try:
+    table = api.table(base_id, table_name)
+    records = table.all()
+    if records:
+        first_field_name = 'Youtube Link'
+        second_column_name = 'Channel Name'
+
+        
+        # Get all values from the first column
+        first_column_values = [record['fields'].get(first_field_name) for record in records]
+        print(f"Values in first column: {first_column_values}")
+        
+        # Or loop through each record
+        print("\nAll records (first column):")
+        for record in records:
+            record_id = record['id']
+            fields = record['fields']
+            if fields:
+                first_value = list(fields.values())[0]
+                table.update(record_id, {second_column_name: 'Test'})  # Update second column with value from first column
+                print(f"Record ID: {record_id}, {first_value}")
+
+
+
+except Exception as e:
+    print(f"Error: {e}")

@@ -2,6 +2,7 @@ import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
 import re
+from pyairtable import Api
 import requests
 import sys
 from googleapiclient.discovery import build
@@ -10,8 +11,15 @@ import isodate
 
 now = datetime.now()
 credsPath = r"C:\Python\EngagementCalculator\engagementcalculator-fef079d955ba.json"
-sheetID = r"1_SMHZEbGrT8MmSgH7hFLA9DuQ2zbf3i5GMREYh3ZnDM"
-APIKey = r"AIzaSyC6vbLan_c0K2sAL8RBqV9F21ssSaXsRuc"
+import json
+
+with open("config.json") as f:
+    config = json.load(f)
+
+api_key = config["airtable"]["api_key"]
+base_id = config["airtable"]["base_id"]
+table_name = config["airtable"]["table_name"]
+api = Api(api_key)
 
 
 # Define the scope
@@ -46,7 +54,7 @@ def get_latest_videos(channel_id, min_results=5, max_results=50):
 
         # Step 1: Get the Uploads playlist ID for the channel
         channel_response = youtube.channels().list(
-            part="contentDetails",
+            part="contentDetails,statistics",
             id=channel_id
         ).execute()
 
@@ -55,6 +63,7 @@ def get_latest_videos(channel_id, min_results=5, max_results=50):
             return
 
         uploads_playlist_id = channel_response["items"][0]["contentDetails"]["relatedPlaylists"]["uploads"]
+        subscriber_count = channel_response["items"][0]["statistics"]["subscriberCount"]
 
         # Step 2: Get the latest videos from the uploads playlist
         video_ids = []
@@ -100,7 +109,8 @@ def get_latest_videos(channel_id, min_results=5, max_results=50):
                         "views": stats.get("viewCount", "0"),
                         "likes": stats.get("likeCount", "0"),
                         "comments": stats.get("commentCount", "0"),
-                        "HoursSinceUpload": DaysAndHoursdifference
+                        "HoursSinceUpload": DaysAndHoursdifference,
+                        "subscriberCount": subscriber_count
                     })
                     # Stop if we have enough
                     if len(videos) >= min_results:
@@ -124,6 +134,7 @@ if __name__ == "__main__":
     videos = get_latest_videos(channel_id)
     
     if videos:
+        Subscribers = int(videos[0]["subscriberCount"])
         total_views = sum(int(v["views"]) for v in videos)
         total_likes = sum(int(v["likes"]) for v in videos)
         EngagementRate = (total_likes / total_views * 100) if total_views > 0 else 0
@@ -138,7 +149,7 @@ if __name__ == "__main__":
         print(f"Average Likes: {avg_likes:.2f}")
         print(f"Engagement Rate: {EngagementRate:.2f}%")
         print(f"Average Comments: {avg_comments:.2f}")
-        
+        print(f"Subscribers: {Subscribers}")
         
         # Or print each video
         for video in videos:

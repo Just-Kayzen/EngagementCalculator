@@ -1,7 +1,9 @@
+import json
 import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
 import re
+from pyairtable import Api
 import requests
 from googleapiclient.discovery import build
 from urllib.parse import urlparse, parse_qs
@@ -9,10 +11,11 @@ import sys
 from datetime import datetime
 import isodate
 
+with open("config.json") as f:
+    config = json.load(f)
+
 now = datetime.now()
-credsPath = r"C:\Python\EngagementCalculator\engagementcalculator-fef079d955ba.json"
-sheetID = r"1PsHh67ZCFtPR7fLmIlHJ5iOSQXqfWiq6ocwek289x_4"
-APIKey = r"AIzaSyC6vbLan_c0K2sAL8RBqV9F21ssSaXsRuc"
+APIKey = config["youtube"]["api_key"]
 
 # Define the scope
 scope = [
@@ -21,6 +24,21 @@ scope = [
 ]
 
 # Add credentials
+youtube = build("youtube", "v3", developerKey=APIKey)
+api_key = config["airtable"]["api_key"]
+base_id = config["airtable"]["base_id"]
+table_name = config["airtable"]["table_name"]
+api = Api(api_key)
+
+
+# Define the scope
+scope = [
+    'https://www.googleapis.com/auth/spreadsheets',
+    "https://www.googleapis.com/auth/drive"
+]
+
+# Add credentials
+credsPath = r"C:\Python\EngagementCalculator\engagementcalculator-fef079d955ba.json"
 creds = Credentials.from_service_account_file(credsPath, scopes=scope)
 # Authenticate and create the client
 client = gspread.authorize(creds)
