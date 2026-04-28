@@ -63,7 +63,7 @@ def get_latest_videos(channel_id, min_results=5, max_results=50):
 
         if not channel_response["items"]:
             print("Channel not found.")
-            return
+            return None
 
         uploads_playlist_id = channel_response["items"][0]["contentDetails"]["relatedPlaylists"]["uploads"]
         subscriber_count = channel_response["items"][0]["statistics"]["subscriberCount"]
@@ -124,7 +124,7 @@ def get_latest_videos(channel_id, min_results=5, max_results=50):
             if not next_page_token:
                 break  # No more videos in playlist
 
-            return videos
+        return videos
 
 
     except Exception as e:
@@ -204,6 +204,8 @@ if __name__ == "__main__":
 try:
     table = api.table(base_id, table_name)
     records = table.all()
+    #print(records)
+    #breakpoint()
     if records:
         YTLink_column = 'Youtube Link'
         ChannelName_column = 'Channel Name'
@@ -277,13 +279,17 @@ try:
                         print("---")"""
                     
                     
-                    table.update(record_id, {ChannelName_column: channel_name})  # Update channel name
-                    table.update(record_id, {Subscribers_column: Subscribers})  # Update subscriber count
-                    table.update(record_id, {AvgViews_column: avg_views})  # Update average views
-                    table.update(record_id, {AvgLikes_column: avg_likes})  # Update average likes
-                    table.update(record_id, {AvgComments_column: avg_comments})  # Update average comments  
-                    table.update(record_id, {EngagementRate_column: EngagementRate})  # Update engagement rate
+                    update_fields = {
+                        ChannelName_column: channel_name,
+                        Subscribers_column: Subscribers,
+                        AvgViews_column: avg_views,
+                        AvgLikes_column: avg_likes,
+                        AvgComments_column: avg_comments,
+                        EngagementRate_column: EngagementRate
+                    }
                     
+                    # Single update call instead of 6 separate calls
+                    table.update(record_id, update_fields)
                 
                 except Exception as e:
                     print(f"Error processing record {record_id}: {e}")
