@@ -3,16 +3,17 @@ import gspread
 from google.oauth2.service_account import Credentials
 import re
 import requests
-import sys
 from googleapiclient.discovery import build
+from urllib.parse import urlparse, parse_qs
+import sys
 from datetime import datetime
 import isodate
+import math
 
 now = datetime.now()
 credsPath = r"C:\Python\EngagementCalculator\engagementcalculator-fef079d955ba.json"
-sheetID = r"1_SMHZEbGrT8MmSgH7hFLA9DuQ2zbf3i5GMREYh3ZnDM"
+sheetID = r"1PsHh67ZCFtPR7fLmIlHJ5iOSQXqfWiq6ocwek289x_4"
 APIKey = r"AIzaSyC6vbLan_c0K2sAL8RBqV9F21ssSaXsRuc"
-
 
 # Define the scope
 scope = [
@@ -20,12 +21,13 @@ scope = [
     "https://www.googleapis.com/auth/drive"
 ]
 
+
 # Add credentials
 creds = Credentials.from_service_account_file(credsPath, scopes=scope)
 # Authenticate and create the client
 client = gspread.authorize(creds)
+youtube = build("youtube", "v3", developerKey=APIKey)
 
-# --- Helpers ---
 
 def is_vertical(embed_html):
     """
@@ -117,10 +119,101 @@ def get_latest_videos(channel_id, min_results=5, max_results=50):
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
 
-# Example usage: Replace with the channel's ID
+def resolve_channel_id_and_name(youtube_url: str):
+    """
+    Given any YouTube URL, return the canonical channel ID (UC...) and channel name.
+    """
+    parsed = urlparse(youtube_url)
+    path = parsed.path.strip("/")
+
+    channel_id = None
+
+    # Direct channel ID link
+    match = re.match(r"channel/(UC[\w-]{22})", path)
+    if match:
+        channel_id = match.group(1)
+
+    # Handle-based link (@username)
+    elif path.startswith("@"):
+        handle = path[1:]
+        request = youtube.search().list(
+            q=handle,
+            type="channel",
+            part="id"
+        )
+        response = request.execute()
+        if response["items"]:
+            channel_id = response["items"][0]["id"]["channelId"]
+
+    # Custom /c/ or /user/ links
+    elif path.startswith("c/") or path.startswith("user/"):
+        custom_name = path.split("/", 1)[1]
+        request = youtube.search().list(
+            q=custom_name,
+            type="channel",
+            part="id"
+        )
+        response = request.execute()
+        if response["items"]:
+            channel_id = response["items"][0]["id"]["channelId"]
+
+    # Video link with ab_channel
+    elif "watch" in path:
+        query = parse_qs(parsed.query)
+        if "ab_channel" in query:
+            channel_name = query["ab_channel"][0]
+            request = youtube.search().list(
+                q=channel_name,
+                type="channel",
+                part="id"
+            )
+            response = request.execute()
+            if response["items"]:
+                channel_id = response["items"][0]["id"]["channelId"]
+
+    # If we found a channel ID, get the channel name
+    if channel_id:
+        request = youtube.channels().list(
+            part="snippet",
+            id=channel_id
+        )
+        response = request.execute()
+        if response["items"]:
+            channel_name = response["items"][0]["snippet"]["title"]
+            return channel_id, channel_name
+
+    return None, None
+
+# --- Example usage ---
 if __name__ == "__main__":
-    channel_id = "UCnUAyD4t2LkvW68YrDh7fDg"
+    YT_API_KEY = APIKey
+    sheet = client.open_by_key(sheetID).sheet1
     
+
+# Get all values in the sheet
+all_values = sheet.get_all_values()
+
+# Find the index of the "Youtube Links" column
+header = all_values[0]  # first row is the header
+Channel_index = header.index("Channel")  # find the column position
+Name_index = header.index("Name")  # find the column position
+AvgViews_index = header.index("Avg Views")  # find the column position
+AvgLikes_index = header.index("Avg Likes")  # find the column position
+AvgComments_index = header.index("Avg Comments")  # find the column position
+EngagementRate_index = header.index("Engagement Rate")  # find the column position
+
+
+# Loop through each row (skipping header)
+for row_num, row in enumerate(all_values[1:], start=2):  # start=2 because row 1 is header
+    url = row[Channel_index]
+    try:
+        channel_id, channel_name = resolve_channel_id_and_name(url)
+        if not channel_id:
+            raise ValueError("Could not extract channel id from URL")
+    except Exception as e:
+        sheet.update_cell(row_num, Name_index + 1, "Error: " + str(e))  # Write error message in Name column
+        continue
+
     videos = get_latest_videos(channel_id)
     
     if videos:
@@ -130,10 +223,10 @@ if __name__ == "__main__":
         total_comments = sum(int(v["comments"]) for v in videos)
         num_videos = len(videos)
         
-        avg_views = total_views / num_videos
-        avg_likes = total_likes / num_videos
-        avg_comments = total_comments / num_videos
-        
+        avg_views = math.floor(total_views / num_videos)
+        avg_likes = math.floor(total_likes / num_videos)
+        avg_comments = math.floor(total_comments / num_videos)
+
         print(f"Average Views: {avg_views:.2f}")
         print(f"Average Likes: {avg_likes:.2f}")
         print(f"Engagement Rate: {EngagementRate:.2f}%")
@@ -144,5 +237,11 @@ if __name__ == "__main__":
         for video in videos:
             print(video)
             print("---")
+        
 
+    sheet.update_cell(row_num, Name_index + 1, channel_name)  # Write channel name
+    sheet.update_cell(row_num, AvgViews_index + 1, f"{avg_views}")  # Write average views
+    sheet.update_cell(row_num, AvgLikes_index + 1, f"{avg_likes}")    # Write average likes
+    sheet.update_cell(row_num, AvgComments_index + 1, f"{avg_comments}") # Write average comments
+    sheet.update_cell(row_num, EngagementRate_index + 1, f"{EngagementRate:.2f}%")  # Write engagement rate
 
